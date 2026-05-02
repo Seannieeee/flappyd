@@ -135,6 +135,8 @@
             -webkit-justify-content: center;
             justify-content: center;
             z-index: 20;
+        }
+        .screen:not(.hidden) {
             background: rgba(0,0,0,0.15);
             backdrop-filter: blur(2px);
             -webkit-backdrop-filter: blur(2px);
@@ -220,6 +222,14 @@
             margin: 0 auto 12px;
             animation: float 2s ease-in-out infinite;
             flex-shrink: 0;
+        }
+
+        .bird-gif {
+            position: absolute;
+            pointer-events: none;
+            z-index: 15;
+            image-rendering: pixelated;
+            display: none;
         }
 
         @keyframes float {
@@ -1389,7 +1399,7 @@
         let gameState = 'idle', raf;
         let shX = 0, shY = 0, shF = 0;
         const isMobile = /Android|webOS|iPhone|iPad|iPod|BlackBerry|IEMobile|Opera Mini/i.test(navigator.userAgent);
-        const BSZ = isMobile ? 18 : 24, GR = 0.42, FF = -8.5, PSB = (isMobile ? 2.5 : 2.8), PGAP = isMobile ? 150 : 185, PINT = 100, PW = isMobile ? 42 : 52, GH = 60, BLKSZ = isMobile ? 12 : 16;
+        const BSZ = isMobile ? 18 : 24, GR = 0.42, FF = -8.5, PSB = (isMobile ? 2.5 : 2.8), PGAP = isMobile ? 150 : 185, PINT = 175, PW = isMobile ? 42 : 52, GH = 60, BLKSZ = isMobile ? 12 : 16;
         // Power-up spawn: 9% base chance (down from 18%)
         const PUPS = [
             { type: 'bazooka', e: '🚀', c: '#FF6600', dur: 300, ch: .28 },
@@ -1617,10 +1627,13 @@
             ctx.restore();
         }
         function drawPipe(p) {
-            // DOM pipes handle themed rendering - always update position/visibility
-            if (p._domTop) updatePipeDom(p);
+            // DOM pipes handle themed rendering
+            if (p._domTop) {
+                updatePipeDom(p);
+                return; // SKIP CANVAS DRAWING if DOM pipe is active
+            }
             if (p.broken) return;
-            // Canvas fallback for classic
+            // Canvas fallback for classic only
             drawCol(p.x, 0, p.topH, p.th);
             drawCol(p.x, p.botY, GY - p.botY, p.th);
             // gap arrows
@@ -1630,33 +1643,37 @@
             const gl = ctx.createLinearGradient(p.x, p.topH, p.x, p.botY); gl.addColorStop(0, 'rgba(0,255,136,0)'); gl.addColorStop(.5, 'rgba(0,255,136,0.035)'); gl.addColorStop(1, 'rgba(0,255,136,0)');
             ctx.fillStyle = gl; ctx.fillRect(p.x, p.topH, PW, PGAP);
         }
+        let _cachedBgif = null;
+        let _cachedSk = null;
         function drawBird() {
+            if (!_cachedBgif) _cachedBgif = document.getElementById('birdGif');
             const sk = getActiveSkin();
-            bird.trail.forEach((t, i) => { ctx.save(); ctx.globalAlpha = (i / bird.trail.length) * .28; ctx.translate(t.x, t.y); ctx.rotate(t.a); ctx.fillStyle = sk.glow || '#FFF'; ctx.beginPath(); ctx.ellipse(0, 0, BSZ * .4, BSZ * .3, 0, 0, Math.PI * 2); ctx.fill(); ctx.restore(); });
-            
             if (sk.img) {
-                let bgif = document.getElementById('birdGif');
-                if (!bgif) {
-                    bgif = document.createElement('img');
-                    bgif.id = 'birdGif';
-                    bgif.style.cssText = 'position:absolute;pointer-events:none;z-index:5;image-rendering:pixelated;';
-                    document.body.appendChild(bgif);
+                if (!_cachedBgif) {
+                    _cachedBgif = document.createElement('img');
+                    _cachedBgif.id = 'birdGif';
+                    _cachedBgif.className = 'bird-gif';
+                    document.body.appendChild(_cachedBgif);
                 }
-                if (bgif.getAttribute('src') !== sk.img) bgif.src = sk.img;
-                bgif.style.display = 'block';
-                bgif.style.left = (bird.x - BSZ * 1.5) + 'px';
-                bgif.style.top = (bird.y - BSZ * 1.5) + 'px';
-                bgif.style.width = (BSZ * 3) + 'px';
-                bgif.style.height = (BSZ * 3) + 'px';
-                bgif.style.transform = `rotate(${Math.max(-.4, Math.min(Math.PI / 2, bird.vy * .055))}rad)`;
-                if (apower && apower.type === 'shield') {
+                _cachedBgif.style.display = 'block';
+                if (_cachedBgif.src.indexOf(sk.img) === -1) _cachedBgif.src = sk.img;
+                _cachedBgif.style.left = (bird.x - BSZ * 1.5) + 'px';
+                _cachedBgif.style.top = (bird.y - BSZ * 1.5) + 'px';
+                _cachedBgif.style.width = (BSZ * 3) + 'px';
+                _cachedBgif.style.height = (BSZ * 3) + 'px';
+                _cachedBgif.style.transform = `rotate(${Math.max(-.4, Math.min(Math.PI / 2, bird.vy * .055))}rad)`;
+                if (inv > 0 && inv % 4 < 2) _cachedBgif.style.opacity = '0.3';
+                else _cachedBgif.style.opacity = '1';
+                
+                if (sk.glow) {
                     ctx.save(); ctx.translate(bird.x, bird.y);
-                    ctx.beginPath(); ctx.arc(0, 0, BSZ * 1.15, 0, Math.PI * 2); ctx.strokeStyle = '#00f5ff'; ctx.lineWidth = 3; ctx.shadowColor = '#00f5ff'; ctx.shadowBlur = 14; ctx.stroke();
+                    const g = ctx.createRadialGradient(0, 0, 0, 0, 0, BSZ * 1.2);
+                    g.addColorStop(0, sk.glow + '44'); g.addColorStop(1, 'transparent');
+                    ctx.fillStyle = g; ctx.beginPath(); ctx.arc(0, 0, BSZ * 1.2, 0, Math.PI * 2); ctx.fill();
                     ctx.restore();
                 }
             } else {
-                const bgif = document.getElementById('birdGif');
-                if (bgif) bgif.style.display = 'none';
+                if (_cachedBgif) _cachedBgif.style.display = 'none';
                 drawBirdAt(ctx, sk, bird.x, bird.y, BSZ, bird.flap, Math.max(-.4, Math.min(Math.PI / 2, bird.vy * .055)), apower && apower.type === 'shield');
             }
         }
@@ -2490,7 +2507,10 @@
             function step() { cdn.textContent = cd; cdn.style.animation = 'none'; cdn.offsetHeight; cdn.style.animation = 'cdpop 1s ease forwards'; drawBG(); drawGnd(); drawBird(); if (cd > 0) { cd--; setTimeout(step, 950); } else { cde.style.display = 'none'; document.getElementById('touchHint').style.display = 'none'; gameState = 'playing'; raf = requestAnimationFrame(gameLoop); } } step();
         }
         function togglePause() { if (gameState === 'playing') { gameState = 'paused'; document.getElementById('pauseScreen').classList.remove('hidden'); document.getElementById('pauseBtn').textContent = '▶ RESUME'; } else if (gameState === 'paused') { document.getElementById('pauseScreen').classList.add('hidden'); gameState = 'playing'; document.getElementById('pauseBtn').textContent = '⏸ PAUSE'; } }
-        function quitToMenu() { clearPipeDoms(); gameState = 'idle'; cancelAnimationFrame(raf); showScreen('homeScreen'); }
+        function quitToMenu() { 
+            _cachedBgif = null;
+            gameState = 'idle'; showScreen('homeScreen'); clearPipeDoms(); 
+        }
 
         document.addEventListener('keydown', e => { if (e.code === 'Space' || e.code === 'ArrowUp') { e.preventDefault(); if (gameState === 'playing') flap(); else if (gameState === 'paused') togglePause(); } if (e.code === 'Escape' && (gameState === 'playing' || gameState === 'paused')) togglePause(); });
         // Touch / pointer input — works on iOS Safari, Android Chrome, Samsung Internet
